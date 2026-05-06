@@ -439,7 +439,7 @@ export default function Dashboard() {
         <div className={styles.headerLeft}>
           <div className={styles.logo}>
             <span className={styles.logoMark} />
-            <span className={styles.logoText}>ORBIT<span className={styles.logoAccent}>WATCH</span></span>
+            <span className={styles.logoText}>STELLAR<span className={styles.logoAccent}>LITE</span></span>
           </div>
           <div className={styles.liveChip}>
             <span className={styles.liveDot} />

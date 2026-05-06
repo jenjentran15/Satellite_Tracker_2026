@@ -2,7 +2,7 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'OrbitWatch — Space Situational Awareness',
+  title: 'StellarLite — Space Situational Awareness',
   description: 'Real-time satellite tracking and conjunction analysis',
 };
 
