@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///Users/pnjtech/Desktop/Satellite_Tracker_2026/app/layout.jsx"],"sourcesContent":["\nimport './globals.css';\n\nexport const metadata = {\n  title: 'OrbitWatch — Space Situational Awareness',\n  description: 'Real-time satellite tracking and conjunction analysis',\n};\n\nexport default function RootLayout({ children }) {\n  return (\n    <html lang=\"en\">\n      <head>\n        <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />\n        <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossOrigin=\"anonymous\" />\n        <link href=\"https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap\" rel=\"stylesheet\" />\n      </head>\n      <body>{children}</body>\n    </html>\n  );\n}\n"],"names":["metadata","title","description","RootLayout","children","lang","rel","href","crossOrigin"],"mappings":";;;;;;;;;AAGO,MAAMA,WAAW;IACtBC,OAAO;IACPC,aAAa;AACf;AAEe,SAASC,WAAW,EAAEC,QAAQ,EAAE;IAC7C,qBACE,qOAAC;QAAKC,MAAK;;0BACT,qOAAC;;kCACC,oOAAC;wBAAKC,KAAI;wBAAaC,MAAK;;kCAC5B,oOAAC;wBAAKD,KAAI;wBAAaC,MAAK;wBAA4BC,aAAY;;kCACpE,oOAAC;wBAAKD,MAAK;wBAA6GD,KAAI;;;;0BAE9H,oOAAC;0BAAMF;;;;AAGb"}}]
-}
