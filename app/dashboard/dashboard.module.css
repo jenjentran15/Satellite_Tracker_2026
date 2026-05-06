@@ -1,0 +1,234 @@
+.root {
+  min-height: 100vh;
+  background: #020817;
+  color: #e2e8f0;
+  font-family: 'DM Mono', 'Fira Code', monospace;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header ── */
+.header {
+  display: grid;
+  grid-template-columns: 220px 1fr 220px;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 0.5px solid rgba(56,189,248,0.15);
+  background: rgba(2,8,23,0.95);
+  backdrop-filter: blur(12px);
+  z-index: 50;
+  flex-shrink: 0;
+}
+
+.headerLeft { display: flex; align-items: center; gap: 12px; }
+.headerCenter { display: flex; justify-content: center; }
+.headerRight { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+
+.logo { display: flex; align-items: center; gap: 8px; }
+.logoMark {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8, 0 0 16px rgba(56,189,248,0.4);
+}
+.logoText { font-size: 15px; font-weight: 700; letter-spacing: 0.12em; color: #f1f5f9; }
+.logoAccent { color: #38bdf8; }
+
+.liveChip {
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(34,197,94,0.1);
+  border: 0.5px solid rgba(34,197,94,0.3);
+  border-radius: 20px;
+  padding: 3px 9px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #22c55e;
+}
+.liveDot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #22c55e;
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(0.8)} }
+
+.statChip {
+  display: flex; flex-direction: column; align-items: flex-end;
+  padding: 4px 10px;
+  border: 0.5px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
+}
+.statVal { font-size: 14px; font-weight: 600; color: #f1f5f9; line-height: 1.2; }
+.statLabel { font-size: 9px; color: #64748b; letter-spacing: 0.06em; text-transform: uppercase; }
+.clock { font-size: 12px; color: #38bdf8; font-variant-numeric: tabular-nums; letter-spacing: 0.05em; }
+
+/* ── Query banner ── */
+.queryBanner {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 20px;
+  background: rgba(56,189,248,0.05);
+  border-bottom: 0.5px solid rgba(56,189,248,0.1);
+  font-size: 12px;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+.queryBannerText { color: #38bdf8; }
+.followUpBtn {
+  background: none; border: 0.5px solid rgba(56,189,248,0.3);
+  border-radius: 6px; padding: 4px 10px;
+  color: #38bdf8; font-size: 11px; cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.followUpBtn:hover { background: rgba(56,189,248,0.08); }
+
+/* ── Main layout ── */
+.main {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Globe ── */
+.globePanel {
+  position: relative;
+  background: #020817;
+  overflow: hidden;
+}
+.globe { width: 100%; height: 100%; display: block; }
+.globeLegend {
+  position: absolute; bottom: 16px; left: 16px;
+  display: flex; gap: 12px; flex-wrap: wrap;
+  background: rgba(2,8,23,0.8);
+  border: 0.5px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 8px 12px;
+  backdrop-filter: blur(8px);
+}
+.legendItem { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #94a3b8; }
+.legendDot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── Sidebar ── */
+.sidebar {
+  border-left: 0.5px solid rgba(56,189,248,0.1);
+  background: rgba(2,8,23,0.98);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 0.5px solid rgba(56,189,248,0.1);
+  flex-shrink: 0;
+}
+.tab {
+  flex: 1; padding: 11px 4px;
+  background: none; border: none;
+  font-size: 11px; font-weight: 500;
+  letter-spacing: 0.05em;
+  color: #475569;
+  cursor: pointer;
+  font-family: inherit;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  text-transform: uppercase;
+}
+.tab:hover { color: #94a3b8; }
+.tabActive { color: #38bdf8 !important; border-bottom-color: #38bdf8 !important; }
+
+.tabContent { flex: 1; overflow-y: auto; padding: 12px; }
+.tabContent::-webkit-scrollbar { width: 4px; }
+.tabContent::-webkit-scrollbar-thumb { background: rgba(56,189,248,0.2); border-radius: 2px; }
+
+.sectionLabel {
+  font-size: 9px; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: #334155; margin-bottom: 8px;
+}
+
+/* ── Conjunction cards ── */
+.conjCard {
+  background: rgba(255,255,255,0.02);
+  border: 0.5px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.conjCard:hover { background: rgba(255,255,255,0.05); border-color: rgba(56,189,248,0.2); }
+.conjHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.conjTca { font-size: 10px; color: #475569; font-variant-numeric: tabular-nums; }
+.conjObjects { font-size: 12px; font-weight: 500; color: #e2e8f0; margin-bottom: 4px; }
+.conjSlash { color: #475569; margin: 0 4px; }
+.conjMeta { display: flex; justify-content: space-between; font-size: 11px; color: #475569; }
+
+/* ── Risk badges ── */
+.riskBadge {
+  font-size: 9px; font-weight: 700;
+  padding: 2px 7px; border-radius: 4px;
+  letter-spacing: 0.06em;
+}
+.risk_high { background: rgba(239,68,68,0.15); color: #f87171; border: 0.5px solid rgba(239,68,68,0.3); }
+.risk_medium { background: rgba(245,158,11,0.15); color: #fbbf24; border: 0.5px solid rgba(245,158,11,0.3); }
+.risk_low { background: rgba(34,197,94,0.1); color: #4ade80; border: 0.5px solid rgba(34,197,94,0.25); }
+
+/* ── Satellite rows ── */
+.satRow {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 6px; border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s;
+  margin-bottom: 2px;
+}
+.satRow:hover { background: rgba(255,255,255,0.04); }
+.satDot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.satInfo { flex: 1; min-width: 0; }
+.satName { font-size: 12px; font-weight: 500; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.satMeta { font-size: 10px; color: #475569; margin-top: 1px; }
+.moreCount { font-size: 11px; color: #334155; text-align: center; padding: 8px; }
+
+/* ── Heatmap ── */
+.heatmapWrap {
+  display: grid; grid-template-columns: repeat(12, 1fr);
+  gap: 2px; margin-bottom: 6px;
+}
+.hmCell { height: 18px; border-radius: 2px; cursor: pointer; transition: opacity .15s; }
+.hmCell:hover { opacity: 0.7 !important; }
+.hmLabels { display: flex; justify-content: space-between; font-size: 9px; color: #334155; margin-bottom: 12px; }
+
+.barRow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.barLabel { font-size: 10px; color: #64748b; width: 28px; flex-shrink: 0; }
+.barTrack { flex: 1; height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
+.barFill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+.barPct { font-size: 10px; color: #475569; width: 28px; text-align: right; }
+
+/* ── Detail drawer ── */
+.detailDrawer {
+  position: absolute;
+  bottom: 0; left: 0; right: 320px;
+  background: rgba(2,8,23,0.97);
+  border-top: 0.5px solid rgba(56,189,248,0.2);
+  backdrop-filter: blur(12px);
+  padding: 14px 20px;
+  z-index: 40;
+  animation: slideUp 0.2s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.drawerHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.drawerTitle { font-size: 13px; font-weight: 600; color: #38bdf8; letter-spacing: 0.05em; }
+.drawerClose {
+  background: none; border: none; color: #475569; font-size: 14px;
+  cursor: pointer; padding: 2px 6px; border-radius: 4px;
+  transition: color 0.1s;
+}
+.drawerClose:hover { color: #e2e8f0; }
+.drawerGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 24px; }
+.drawerRow { display: flex; flex-direction: column; gap: 2px; }
+.drawerRow span:first-child { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: #334155; }
+.drawerRow span:last-child { font-size: 12px; font-weight: 500; color: #e2e8f0; }

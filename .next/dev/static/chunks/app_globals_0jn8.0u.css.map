@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 1, "column": 0}, "map": {"version":3,"sources":["file:///Users/pnjtech/Desktop/Satellite_Tracker_2026/app/globals.css"],"sourcesContent":["*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }\n\nhtml, body {\n  height: 100%;\n  background: #020817;\n  color: #e2e8f0;\n  font-family: 'DM Sans', sans-serif;\n  -webkit-font-smoothing: antialiased;\n  overflow: hidden;\n}\n\n#__next, main { height: 100%; }\n\n::-webkit-scrollbar { width: 4px; height: 4px; }\n::-webkit-scrollbar-track { background: transparent; }\n::-webkit-scrollbar-thumb { background: rgba(56,189,248,0.2); border-radius: 2px; }\n\ninput, button, select { font-family: inherit; }\n\n::selection { background: rgba(56,189,248,0.25); color: #f1f5f9; }\n"],"names":[],"mappings":"AAAA;;;;;;AAEA;;;;;;;;;AASA;;;;AAEA;;;;;AACA;;;;AACA;;;;;AAEA;;;;AAEA"}}]
+}
