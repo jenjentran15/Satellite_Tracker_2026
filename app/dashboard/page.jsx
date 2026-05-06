@@ -5,21 +5,6 @@ import NaturalQueryBar from '@/components/NaturalQueryBar/NaturalQueryBar';
 import { applyQueryFilter, getHighlightColor } from '@/lib/satelliteFilter';
 import styles from './dashboard.module.css';
 
-const MOCK_SATELLITES = Array.from({ length: 340 }, (_, i) => ({
-  noradId: 25544 + i,
-  name: i === 0 ? 'ISS (ZARYA)' : i < 60 ? `STARLINK-${3000 + i}` : i < 120 ? `DEBRIS-${2020 + i}` : i < 180 ? `GPS-${i}` : `SAT-${1000 + i}`,
-  type: i < 60 ? 'active' : i < 140 ? 'debris' : i < 180 ? 'active' : i % 5 === 0 ? 'inactive' : 'active',
-  operator: i < 60 ? 'SpaceX' : i < 120 ? 'Unknown' : i < 180 ? 'US Space Force' : 'Various',
-  constellation: i < 60 ? 'Starlink' : i < 180 ? 'GPS' : null,
-  altitude: 200 + Math.random() * 35000,
-  inclination: 10 + Math.random() * 100,
-  orbitType: i < 60 ? 'LEO' : i < 180 ? 'MEO' : Math.random() > 0.8 ? 'GEO' : 'LEO',
-  launchYear: 2010 + Math.floor(Math.random() * 15),
-  lat: (Math.random() - 0.5) * 160,
-  lon: (Math.random() - 0.5) * 360,
-  riskLevel: i % 40 === 0 ? 'high' : i % 15 === 0 ? 'medium' : null,
-}));
-
 const CONJUNCTIONS = [
   { id: 1, obj1: 'ISS', obj2: 'DEBRIS-2021-07', sep: '1.9 km', risk: 'high', tca: 'T+03:15', alt: '410 km' },
   { id: 2, obj1: 'STARLINK-3041', obj2: 'SL-24 R/B', sep: '4.7 km', risk: 'high', tca: 'T+06:22', alt: '548 km' },
@@ -30,12 +15,19 @@ const CONJUNCTIONS = [
 export default function Dashboard() {
   const canvasRef = useRef(null);
   const animRef = useRef(null);
-  const stateRef = useRef({ satellites: MOCK_SATELLITES, filtered: null, angle: 0, hoveredId: null });
+  const satPositionsRef = useRef([]);
+  const stateRef = useRef({
+    satellites: [], filtered: null, angle: 0, hoveredId: null,
+    zoom: { level: 1, offX: 0, offY: 0, targetLevel: 1, targetOffX: 0, targetOffY: 0 },
+  });
   const [queryMeta, setQueryMeta] = useState(null);
   const [selectedSat, setSelectedSat] = useState(null);
   const [tick, setTick] = useState(0);
   const [activeTab, setActiveTab] = useState('conjunctions');
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
 
+  // Clock
   useEffect(() => {
     const tick = () => {
       const el = document.getElementById('clock');
@@ -52,8 +44,28 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, []);
 
+  // Fetch real satellite data
+  useEffect(() => {
+    fetch('/api/satellites')
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        if (data.error) throw new Error(data.error);
+        stateRef.current.satellites = data;
+        setIsLoading(false);
+        setTick(t => t + 1);
+      })
+      .catch(err => {
+        console.error('Failed to load satellites:', err);
+        setLoadError(err.message);
+        setIsLoading(false);
+      });
+  }, []);
+
   const handleQueryResult = useCallback((nlqResult) => {
-    const filtered = applyQueryFilter(MOCK_SATELLITES, nlqResult);
+    const filtered = applyQueryFilter(stateRef.current.satellites, nlqResult);
     stateRef.current.filtered = filtered;
     setQueryMeta({ summary: nlqResult.humanSummary, count: filtered.length, followUp: nlqResult.followUp });
     setTick(t => t + 1);
@@ -78,10 +90,15 @@ export default function Dashboard() {
     window.addEventListener('resize', resize);
 
     function draw() {
-      const { satellites, filtered, angle } = stateRef.current;
+      const { satellites, filtered, angle, zoom } = stateRef.current;
       const w = canvas.width, h = canvas.height;
       const cx = w / 2, cy = h / 2;
       const R = Math.min(w, h) * 0.36;
+
+      // lerp zoom
+      zoom.level += (zoom.targetLevel - zoom.level) * 0.08;
+      zoom.offX  += (zoom.targetOffX  - zoom.offX)  * 0.08;
+      zoom.offY  += (zoom.targetOffY  - zoom.offY)  * 0.08;
 
       ctx.clearRect(0, 0, w, h);
 
@@ -89,7 +106,7 @@ export default function Dashboard() {
       ctx.fillStyle = '#020817';
       ctx.fillRect(0, 0, w, h);
 
-      // stars
+      // stars (fixed, outside zoom transform)
       ctx.fillStyle = 'rgba(255,255,255,0.6)';
       for (let i = 0; i < 180; i++) {
         const sx = ((i * 137 + 11) % w);
@@ -97,6 +114,12 @@ export default function Dashboard() {
         const sr = i % 7 === 0 ? 1.2 : 0.5;
         ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
       }
+
+      // apply zoom transform to globe content
+      ctx.save();
+      ctx.translate(cx + zoom.offX, cy + zoom.offY);
+      ctx.scale(zoom.level, zoom.level);
+      ctx.translate(-cx, -cy);
 
       // atmosphere glow
       const atmGrad = ctx.createRadialGradient(cx, cy, R * 0.95, cx, cy, R * 1.12);
@@ -143,11 +166,20 @@ export default function Dashboard() {
         ctx.stroke();
       }
 
-      // satellites
-      const filteredIds = filtered ? new Set(filtered.map(s => s.noradId)) : null;
-      const displaySats = filtered || satellites;
+      // loading indicator on globe
+      if (satellites.length === 0) {
+        ctx.fillStyle = 'rgba(56,189,248,0.7)';
+        ctx.font = '13px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('Loading real satellite data...', cx, cy);
+        ctx.textAlign = 'left';
+      }
 
-      displaySats.forEach((sat, i) => {
+      // satellites
+      const displaySats = filtered || satellites;
+      const framePositions = [];
+
+      displaySats.forEach((sat) => {
         const φ = sat.lat * Math.PI / 180;
         const λ = (sat.lon * Math.PI / 180) + angle;
         const z = Math.cos(φ) * Math.sin(λ);
@@ -159,14 +191,25 @@ export default function Dashboard() {
         const opacity = 0.4 + z * 0.6;
 
         let color;
-        if (sat.riskLevel === 'high') color = `rgba(239,68,68,${opacity})`;
-        else if (sat.riskLevel === 'medium') color = `rgba(245,158,11,${opacity})`;
-        else if (sat.type === 'debris') color = `rgba(148,163,184,${opacity * 0.5})`;
-        else if (sat.constellation === 'Starlink') color = `rgba(96,165,250,${opacity})`;
-        else if (sat.constellation === 'GPS') color = `rgba(52,211,153,${opacity})`;
-        else color = `rgba(148,163,184,${opacity * 0.7})`;
+        if (sat.riskLevel === 'high')              color = `rgba(239,68,68,${opacity})`;
+        else if (sat.riskLevel === 'medium')        color = `rgba(245,158,11,${opacity})`;
+        else if (sat.type === 'debris')             color = `rgba(148,163,184,${opacity * 0.5})`;
+        else if (sat.constellation === 'Starlink')  color = `rgba(96,165,250,${opacity})`;
+        else if (sat.constellation === 'GPS')       color = `rgba(52,211,153,${opacity})`;
+        else if (sat.constellation === 'OneWeb')    color = `rgba(167,139,250,${opacity})`;
+        else if (sat.constellation === 'Iridium')   color = `rgba(45,212,191,${opacity})`;
+        else if (sat.constellation === 'Globalstar')color = `rgba(34,211,238,${opacity})`;
+        else if (sat.constellation === 'BeiDou')    color = `rgba(251,191,36,${opacity})`;
+        else if (sat.constellation === 'Galileo')   color = `rgba(251,146,60,${opacity})`;
+        else if (sat.constellation === 'GLONASS')   color = `rgba(244,114,182,${opacity})`;
+        else if (sat.operator === 'ISS Partners')   color = `rgba(186,230,253,${opacity})`;
+        else if (sat.orbitType === 'GEO')           color = `rgba(234,179,8,${opacity})`;
+        else if (sat.orbitType === 'MEO')           color = `rgba(74,222,128,${opacity})`;
+        else                                        color = `rgba(148,163,184,${opacity * 0.55})`;
 
-        const r = sat.riskLevel === 'high' ? 3.5 : sat.type === 'debris' ? 1.2 : 2;
+        const r = sat.riskLevel === 'high' ? 3.5 : sat.type === 'debris' ? 1.2 : 2.5;
+
+        framePositions.push({ sat, px, py });
 
         if (sat.riskLevel === 'high') {
           ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2);
@@ -177,7 +220,9 @@ export default function Dashboard() {
         ctx.fillStyle = color; ctx.fill();
       });
 
-      // orbit rings for high risk
+      satPositionsRef.current = framePositions;
+
+      // orbit rings for high risk conjunctions
       if (!filtered) {
         CONJUNCTIONS.filter(c => c.risk === 'high').forEach((c, i) => {
           const orbitR = R * (1 + 0.08 + i * 0.04);
@@ -188,16 +233,69 @@ export default function Dashboard() {
         });
       }
 
+      ctx.restore(); // end zoom transform
+
       stateRef.current.angle += 0.0008;
       animRef.current = requestAnimationFrame(draw);
     }
 
+    function handleClick(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clickX = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const clickY = (e.clientY - rect.top) * (canvas.height / rect.height);
+      const { zoom } = stateRef.current;
+      const cxc = canvas.width / 2, cyc = canvas.height / 2;
+
+      let nearest = null, minDist = 12;
+      for (const { sat, px, py } of satPositionsRef.current) {
+        const sx = (px - cxc) * zoom.level + cxc + zoom.offX;
+        const sy = (py - cyc) * zoom.level + cyc + zoom.offY;
+        const d = Math.hypot(clickX - sx, clickY - sy);
+        if (d < minDist) { minDist = d; nearest = { sat, px, py }; }
+      }
+
+      if (nearest) {
+        setSelectedSat(nearest.sat);
+        zoom.targetLevel = 2.2;
+        zoom.targetOffX = (cxc - nearest.px) * 2.2;
+        zoom.targetOffY = (cyc - nearest.py) * 2.2;
+      } else {
+        zoom.targetLevel = 1;
+        zoom.targetOffX = 0;
+        zoom.targetOffY = 0;
+      }
+    }
+
+    function handleMouseMove(e) {
+      const rect = canvas.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+      const { zoom } = stateRef.current;
+      const cxc = canvas.width / 2, cyc = canvas.height / 2;
+
+      const near = satPositionsRef.current.some(({ px, py }) => {
+        const sx = (px - cxc) * zoom.level + cxc + zoom.offX;
+        const sy = (py - cyc) * zoom.level + cyc + zoom.offY;
+        return Math.hypot(mx - sx, my - sy) < 12;
+      });
+      canvas.style.cursor = near ? 'pointer' : 'default';
+    }
+
+    canvas.addEventListener('click', handleClick);
+    canvas.addEventListener('mousemove', handleMouseMove);
+
     draw();
-    return () => { cancelAnimationFrame(animRef.current); window.removeEventListener('resize', resize); };
+    return () => {
+      cancelAnimationFrame(animRef.current);
+      window.removeEventListener('resize', resize);
+      canvas.removeEventListener('click', handleClick);
+      canvas.removeEventListener('mousemove', handleMouseMove);
+    };
   }, []);
 
   const highCount = CONJUNCTIONS.filter(c => c.risk === 'high').length;
-  const totalTracked = queryMeta ? queryMeta.count : MOCK_SATELLITES.length;
+  const totalTracked = queryMeta ? queryMeta.count : stateRef.current.satellites.length;
+  const displaySats = stateRef.current.filtered || stateRef.current.satellites;
 
   return (
     <div className={styles.root}>
@@ -209,7 +307,7 @@ export default function Dashboard() {
           </div>
           <div className={styles.liveChip}>
             <span className={styles.liveDot} />
-            LIVE
+            {isLoading ? 'LOADING' : 'LIVE'}
           </div>
         </div>
 
@@ -243,12 +341,27 @@ export default function Dashboard() {
         </div>
       )}
 
+      {loadError && (
+        <div className={styles.queryBanner} style={{ background: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }}>
+          <span className={styles.queryBannerText} style={{ color: '#ef4444' }}>
+            Failed to load satellite data: {loadError}
+          </span>
+        </div>
+      )}
+
       <main className={styles.main}>
         <div className={styles.globePanel}>
           <canvas ref={canvasRef} className={styles.globe} />
           <div className={styles.globeLegend}>
             <span className={styles.legendItem}><span style={{ background: '#60a5fa' }} className={styles.legendDot} />Starlink</span>
             <span className={styles.legendItem}><span style={{ background: '#34d399' }} className={styles.legendDot} />GPS</span>
+            <span className={styles.legendItem}><span style={{ background: '#a78bfa' }} className={styles.legendDot} />OneWeb</span>
+            <span className={styles.legendItem}><span style={{ background: '#2dd4bf' }} className={styles.legendDot} />Iridium</span>
+            <span className={styles.legendItem}><span style={{ background: '#fbbf24' }} className={styles.legendDot} />BeiDou</span>
+            <span className={styles.legendItem}><span style={{ background: '#fb923c' }} className={styles.legendDot} />Galileo</span>
+            <span className={styles.legendItem}><span style={{ background: '#f472b4' }} className={styles.legendDot} />GLONASS</span>
+            <span className={styles.legendItem}><span style={{ background: '#eab308' }} className={styles.legendDot} />GEO</span>
+            <span className={styles.legendItem}><span style={{ background: '#4ade80' }} className={styles.legendDot} />MEO</span>
             <span className={styles.legendItem}><span style={{ background: '#f59e0b' }} className={styles.legendDot} />Medium risk</span>
             <span className={styles.legendItem}><span style={{ background: '#ef4444' }} className={styles.legendDot} />High risk</span>
             <span className={styles.legendItem}><span style={{ background: '#94a3b8', opacity: 0.5 }} className={styles.legendDot} />Debris</span>
@@ -286,9 +399,9 @@ export default function Dashboard() {
           {activeTab === 'satellites' && (
             <div className={styles.tabContent}>
               <div className={styles.sectionLabel}>
-                {queryMeta ? `${queryMeta.count} results` : 'All objects'}
+                {isLoading ? 'Loading...' : queryMeta ? `${queryMeta.count} results` : `${displaySats.length.toLocaleString()} objects`}
               </div>
-              {(stateRef.current.filtered || MOCK_SATELLITES).slice(0, 12).map(sat => (
+              {displaySats.slice(0, 12).map(sat => (
                 <div key={sat.noradId} className={styles.satRow} onClick={() => setSelectedSat(sat)}>
                   <div className={styles.satDot} style={{
                     background: sat.riskLevel === 'high' ? '#ef4444' : sat.riskLevel === 'medium' ? '#f59e0b' : sat.type === 'debris' ? '#475569' : '#60a5fa'
@@ -300,8 +413,8 @@ export default function Dashboard() {
                   {sat.riskLevel && <span className={`${styles.riskBadge} ${styles['risk_' + sat.riskLevel]}`}>{sat.riskLevel}</span>}
                 </div>
               ))}
-              {(stateRef.current.filtered || MOCK_SATELLITES).length > 12 && (
-                <div className={styles.moreCount}>+{(stateRef.current.filtered || MOCK_SATELLITES).length - 12} more objects</div>
+              {displaySats.length > 12 && (
+                <div className={styles.moreCount}>+{displaySats.length - 12} more objects</div>
               )}
             </div>
           )}
