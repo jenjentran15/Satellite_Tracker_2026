@@ -1,0 +1,106 @@
+.scrubber {
+  position: absolute;
+  bottom: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 55%;
+  background: rgba(2, 8, 23, 0.88);
+  border: 0.5px solid rgba(56, 189, 248, 0.25);
+  border-radius: 12px;
+  padding: 10px 16px 12px;
+  backdrop-filter: blur(12px);
+  z-index: 15;
+  font-family: 'DM Mono', 'Fira Code', monospace;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.timeDisplay {
+  font-size: 11px;
+  color: #38bdf8;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+}
+
+.liveBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 0.5px solid rgba(34, 197, 94, 0.4);
+  border-radius: 6px;
+  color: #22c55e;
+  font-size: 10px;
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.liveBtn:hover { background: rgba(34, 197, 94, 0.08); }
+.liveBtnActive { background: rgba(34, 197, 94, 0.08); }
+
+.liveDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rangeLabel {
+  font-size: 9px;
+  color: #334155;
+  white-space: nowrap;
+  width: 24px;
+  text-align: center;
+}
+
+.slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(to right, rgba(56,189,248,0.6), rgba(56,189,248,0.2));
+  outline: none;
+  cursor: pointer;
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 6px rgba(56,189,248,0.6);
+  cursor: pointer;
+}
+.slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #38bdf8;
+  border: none;
+  cursor: pointer;
+}
+
+.offsetBadge {
+  margin-top: 4px;
+  text-align: center;
+  font-size: 10px;
+  color: #f59e0b;
+  letter-spacing: 0.05em;
+}

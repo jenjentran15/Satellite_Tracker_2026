@@ -2,8 +2,28 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import NaturalQueryBar from '@/components/NaturalQueryBar/NaturalQueryBar';
+import SatelliteDetailPanel from '@/components/SatelliteDetailPanel/SatelliteDetailPanel';
+import TimeScrubber from '@/components/TimeScrubber/TimeScrubber';
 import { applyQueryFilter, getHighlightColor } from '@/lib/satelliteFilter';
+import { initSatrecCache, propagateAllAtTime, propagateOrbitArc } from '@/lib/propagateAtTime';
 import styles from './dashboard.module.css';
+
+function isSatelliteVisible(sat, userLat, userLon) {
+  const R = 6371;
+  const latO = userLat * Math.PI / 180;
+  const lonO = userLon * Math.PI / 180;
+  const latS = sat.lat * Math.PI / 180;
+  const lonS = sat.lon * Math.PI / 180;
+  const upX = Math.cos(latO) * Math.cos(lonO);
+  const upY = Math.cos(latO) * Math.sin(lonO);
+  const upZ = Math.sin(latO);
+  const s = 1 + sat.altitude / R;
+  const vx = s * Math.cos(latS) * Math.cos(lonS) - upX;
+  const vy = s * Math.cos(latS) * Math.sin(lonS) - upY;
+  const vz = s * Math.sin(latS) - upZ;
+  const vLen = Math.sqrt(vx * vx + vy * vy + vz * vz);
+  return (vx * upX + vy * upY + vz * upZ) / vLen > 0;
+}
 
 const CONJUNCTIONS = [
   { id: 1, obj1: 'ISS', obj2: 'DEBRIS-2021-07', sep: '1.9 km', risk: 'high', tca: 'T+03:15', alt: '410 km' },
@@ -18,6 +38,8 @@ export default function Dashboard() {
   const satPositionsRef = useRef([]);
   const stateRef = useRef({
     satellites: [], filtered: null, angle: 0, hoveredId: null,
+    userLocation: null, showOnlyVisible: false,
+    scrubbedSats: null, orbitArc: null, selectedSat: null,
     zoom: { level: 1, offX: 0, offY: 0, targetLevel: 1, targetOffX: 0, targetOffY: 0 },
   });
   const [queryMeta, setQueryMeta] = useState(null);
@@ -26,6 +48,12 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('conjunctions');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
+  const [userLocation, setUserLocation] = useState(null);
+  const [locationStatus, setLocationStatus] = useState('idle');
+  const [showOnlyVisible, setShowOnlyVisible] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(0);
+  const [timeOffsetSeconds, setTimeOffsetSeconds] = useState(0);
+  const [isLive, setIsLive] = useState(true);
 
   // Clock
   useEffect(() => {
@@ -54,6 +82,7 @@ export default function Dashboard() {
       .then(data => {
         if (data.error) throw new Error(data.error);
         stateRef.current.satellites = data;
+        initSatrecCache(data);
         setIsLoading(false);
         setTick(t => t + 1);
       })
@@ -77,6 +106,56 @@ export default function Dashboard() {
     setTick(t => t + 1);
   }, []);
 
+  const handleTimeOffset = useCallback((offsetSec) => {
+    const isNow = offsetSec === 0;
+    setTimeOffsetSeconds(offsetSec);
+    setIsLive(isNow);
+    if (isNow) {
+      stateRef.current.scrubbedSats = null;
+      stateRef.current.orbitArc = null;
+    } else {
+      const targetDate = new Date(Date.now() + offsetSec * 1000);
+      const scrubbed = propagateAllAtTime(stateRef.current.satellites, targetDate);
+      stateRef.current.scrubbedSats = scrubbed;
+      if (stateRef.current.selectedSat) {
+        stateRef.current.orbitArc = propagateOrbitArc(stateRef.current.selectedSat, targetDate);
+      }
+    }
+    setTick(t => t + 1);
+  }, []);
+
+  const handleSetLive = useCallback(() => {
+    setTimeOffsetSeconds(0);
+    setIsLive(true);
+    stateRef.current.scrubbedSats = null;
+    stateRef.current.orbitArc = null;
+    setTick(t => t + 1);
+  }, []);
+
+  const requestLocation = useCallback(() => {
+    if (!navigator.geolocation) { setLocationStatus('denied'); return; }
+    setLocationStatus('requesting');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const loc = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        setUserLocation(loc);
+        stateRef.current.userLocation = loc;
+        setLocationStatus('granted');
+      },
+      () => setLocationStatus('denied'),
+    );
+  }, []);
+
+  useEffect(() => { stateRef.current.showOnlyVisible = showOnlyVisible; }, [showOnlyVisible]);
+
+  useEffect(() => {
+    if (!userLocation) return;
+    const count = stateRef.current.satellites.filter(
+      s => isSatelliteVisible(s, userLocation.lat, userLocation.lon)
+    ).length;
+    setVisibleCount(count);
+  }, [userLocation, tick]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -90,7 +169,7 @@ export default function Dashboard() {
     window.addEventListener('resize', resize);
 
     function draw() {
-      const { satellites, filtered, angle, zoom } = stateRef.current;
+      const { satellites, filtered, angle, zoom, userLocation: loc, showOnlyVisible: visOnly, scrubbedSats, orbitArc } = stateRef.current;
       const w = canvas.width, h = canvas.height;
       const cx = w / 2, cy = h / 2;
       const R = Math.min(w, h) * 0.36;
@@ -176,7 +255,10 @@ export default function Dashboard() {
       }
 
       // satellites
-      const displaySats = filtered || satellites;
+      let displaySats = filtered || (scrubbedSats || satellites);
+      if (visOnly && loc) {
+        displaySats = displaySats.filter(s => isSatelliteVisible(s, loc.lat, loc.lon));
+      }
       const framePositions = [];
 
       displaySats.forEach((sat) => {
@@ -216,11 +298,62 @@ export default function Dashboard() {
           ctx.fillStyle = `rgba(239,68,68,${opacity * 0.15})`; ctx.fill();
         }
 
+        if (loc && isSatelliteVisible(sat, loc.lat, loc.lon)) {
+          ctx.beginPath(); ctx.arc(px, py, r + 3.5, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(255,255,255,${opacity * 0.55})`;
+          ctx.lineWidth = 1; ctx.stroke();
+        }
+
         ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
         ctx.fillStyle = color; ctx.fill();
       });
 
       satPositionsRef.current = framePositions;
+
+      // user location marker
+      if (loc) {
+        const φ = loc.lat * Math.PI / 180;
+        const λ = (loc.lon * Math.PI / 180) + angle;
+        const zLoc = Math.cos(φ) * Math.sin(λ);
+        if (zLoc >= -0.1) {
+          const px = cx + R * Math.cos(φ) * Math.cos(λ);
+          const py = cy - R * Math.sin(φ);
+          const pulse = (Math.sin(Date.now() * 0.003) + 1) * 0.5;
+          ctx.beginPath(); ctx.arc(px, py, 10 + pulse * 4, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(52,211,153,${0.2 + pulse * 0.25})`;
+          ctx.lineWidth = 1.5; ctx.stroke();
+          ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(52,211,153,0.9)';
+          ctx.lineWidth = 2; ctx.stroke();
+          ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2);
+          ctx.fillStyle = '#34d399'; ctx.fill();
+          ctx.beginPath(); ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff'; ctx.fill();
+        }
+      }
+
+      // orbit arc for selected satellite during time scrub
+      if (orbitArc && orbitArc.length > 1) {
+        ctx.strokeStyle = 'rgba(56,189,248,0.5)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        let firstArcPt = true;
+        for (let i = 0; i < orbitArc.length; i++) {
+          const pt = orbitArc[i];
+          const φ = pt.lat * Math.PI / 180;
+          const λ = (pt.lon * Math.PI / 180) + angle;
+          const z = Math.cos(φ) * Math.sin(λ);
+          if (z < -0.1) { firstArcPt = true; continue; }
+          if (i > 0 && Math.abs(orbitArc[i].lon - orbitArc[i-1].lon) > 180) { firstArcPt = true; }
+          const px = cx + R * Math.cos(φ) * Math.cos(λ);
+          const py = cy - R * Math.sin(φ);
+          firstArcPt ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+          firstArcPt = false;
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
 
       // orbit rings for high risk conjunctions
       if (!filtered) {
@@ -256,10 +389,13 @@ export default function Dashboard() {
 
       if (nearest) {
         setSelectedSat(nearest.sat);
+        stateRef.current.selectedSat = nearest.sat;
         zoom.targetLevel = 2.2;
         zoom.targetOffX = (cxc - nearest.px) * 2.2;
         zoom.targetOffY = (cyc - nearest.py) * 2.2;
       } else {
+        setSelectedSat(null);
+        stateRef.current.selectedSat = null;
         zoom.targetLevel = 1;
         zoom.targetOffX = 0;
         zoom.targetOffY = 0;
@@ -335,7 +471,7 @@ export default function Dashboard() {
           </span>
           {queryMeta.followUp && (
             <button className={styles.followUpBtn} onClick={() => {}}>
-              Try: "{queryMeta.followUp}" →
+              Try: &quot;{queryMeta.followUp}&quot; →
             </button>
           )}
         </div>
@@ -352,7 +488,50 @@ export default function Dashboard() {
       <main className={styles.main}>
         <div className={styles.globePanel}>
           <canvas ref={canvasRef} className={styles.globe} />
+
+          <div className={styles.locationPanel}>
+            {locationStatus === 'idle' && (
+              <button className={styles.locBtn} onClick={requestLocation}>
+                Use my location
+              </button>
+            )}
+            {locationStatus === 'requesting' && (
+              <span className={styles.locStatus}>Locating…</span>
+            )}
+            {locationStatus === 'denied' && (
+              <span className={styles.locDenied}>
+                Location denied —{' '}
+                <button className={styles.locRetry} onClick={requestLocation}>retry</button>
+              </span>
+            )}
+            {locationStatus === 'granted' && userLocation && (
+              <div className={styles.locInfo}>
+                <span className={styles.locMarker} />
+                <div className={styles.locDetails}>
+                  <span className={styles.locCoords}>
+                    {Math.abs(userLocation.lat).toFixed(2)}°{userLocation.lat >= 0 ? 'N' : 'S'},{' '}
+                    {Math.abs(userLocation.lon).toFixed(2)}°{userLocation.lon >= 0 ? 'E' : 'W'}
+                  </span>
+                  <span className={styles.locVisible}>{visibleCount.toLocaleString()} satellites overhead</span>
+                </div>
+                <button
+                  className={`${styles.locToggle} ${showOnlyVisible ? styles.locToggleActive : ''}`}
+                  onClick={() => setShowOnlyVisible(v => !v)}
+                >
+                  {showOnlyVisible ? 'All' : 'Visible only'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <TimeScrubber
+            onTimeOffset={handleTimeOffset}
+            isLive={isLive}
+            onSetLive={handleSetLive}
+          />
+
           <div className={styles.globeLegend}>
+            <span className={styles.legendItem}><span style={{ width: 11, height: 11, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.7)', display: 'inline-block', flexShrink: 0 }} />Overhead</span>
             <span className={styles.legendItem}><span style={{ background: '#60a5fa' }} className={styles.legendDot} />Starlink</span>
             <span className={styles.legendItem}><span style={{ background: '#34d399' }} className={styles.legendDot} />GPS</span>
             <span className={styles.legendItem}><span style={{ background: '#a78bfa' }} className={styles.legendDot} />OneWeb</span>
@@ -449,27 +628,24 @@ export default function Dashboard() {
         </aside>
       </main>
 
-      {selectedSat && (
+      {selectedSat && selectedSat.tle1 && (
+        <SatelliteDetailPanel
+          sat={selectedSat}
+          onClose={() => { setSelectedSat(null); stateRef.current.selectedSat = null; }}
+          userLocation={userLocation}
+        />
+      )}
+      {selectedSat && selectedSat.sep && (
         <div className={styles.detailDrawer}>
           <div className={styles.drawerHeader}>
-            <span className={styles.drawerTitle}>{selectedSat.name || `${selectedSat.obj1} / ${selectedSat.obj2}`}</span>
+            <span className={styles.drawerTitle}>{selectedSat.obj1} / {selectedSat.obj2}</span>
             <button className={styles.drawerClose} onClick={() => setSelectedSat(null)}>✕</button>
           </div>
           <div className={styles.drawerGrid}>
-            {selectedSat.altitude && <>
-              <div className={styles.drawerRow}><span>Altitude</span><span>{Math.round(selectedSat.altitude)} km</span></div>
-              <div className={styles.drawerRow}><span>Orbit type</span><span>{selectedSat.orbitType}</span></div>
-              <div className={styles.drawerRow}><span>Type</span><span>{selectedSat.type}</span></div>
-              <div className={styles.drawerRow}><span>Operator</span><span>{selectedSat.operator}</span></div>
-              <div className={styles.drawerRow}><span>Launch year</span><span>{selectedSat.launchYear}</span></div>
-              <div className={styles.drawerRow}><span>NORAD ID</span><span>{selectedSat.noradId}</span></div>
-            </>}
-            {selectedSat.sep && <>
-              <div className={styles.drawerRow}><span>Separation</span><span>{selectedSat.sep}</span></div>
-              <div className={styles.drawerRow}><span>Time of CA</span><span>{selectedSat.tca}</span></div>
-              <div className={styles.drawerRow}><span>Altitude</span><span>{selectedSat.alt}</span></div>
-              <div className={styles.drawerRow}><span>Risk level</span><span style={{ color: selectedSat.risk === 'high' ? '#ef4444' : selectedSat.risk === 'medium' ? '#f59e0b' : '#22c55e' }}>{selectedSat.risk.toUpperCase()}</span></div>
-            </>}
+            <div className={styles.drawerRow}><span>Separation</span><span>{selectedSat.sep}</span></div>
+            <div className={styles.drawerRow}><span>Time of CA</span><span>{selectedSat.tca}</span></div>
+            <div className={styles.drawerRow}><span>Altitude</span><span>{selectedSat.alt}</span></div>
+            <div className={styles.drawerRow}><span>Risk level</span><span style={{ color: selectedSat.risk === 'high' ? '#ef4444' : selectedSat.risk === 'medium' ? '#f59e0b' : '#22c55e' }}>{selectedSat.risk?.toUpperCase()}</span></div>
           </div>
         </div>
       )}
